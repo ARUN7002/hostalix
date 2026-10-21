@@ -1,0 +1,6 @@
+{
+  "name": "ClinicalCore HMS",
+  "description": "Enterprise Hospital Management System with RBAC, Patient Registration, Doctor Scheduling, Billing, and complete Java 21 Spring Boot architecture.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
