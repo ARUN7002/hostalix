@@ -59,12 +59,13 @@ export interface Doctor {
   employeeCode: string; // e.g. "DOC-701"
   firstName: string;
   lastName: string;
+  chineseName?: string; // e.g. "万斯医生" (Dr. Vance)
   email: string;
   phoneNumber: string;
   departmentId: number;
   specialization: string;
   qualification: string; // e.g. "MD, FACC, Board Certified"
-  consultationFee: number;
+  consultationFee: number; // in USD base
   roomNumber: string;
   availableDays: string[]; // ['MON', 'TUE', 'WED', 'THU', 'FRI']
   timeSlots: string[]; // ['09:00', '09:30', '10:00', ...]
@@ -131,7 +132,8 @@ export interface Invoice {
   discountAmount: number;
   totalAmount: number;
   status: InvoiceStatus;
-  paymentMethod?: 'CASH' | 'CREDIT_CARD' | 'INSURANCE' | 'BANK_TRANSFER';
+  paymentCurrency?: 'USD' | 'CNY';
+  paymentMethod?: string;
   paidAt?: string;
   transactionReference?: string;
   receiptNotes?: string;

@@ -87,7 +87,7 @@ export const JavaLabConsole: React.FC = () => {
             <span className="text-xs text-slate-400">· Maven 3.9+ · MySQL 8.0 · JUnit 5</span>
           </div>
           <h2 className="text-xl font-bold mt-1 text-white">
-            Architecture, Java Core Codebase &amp; Academic Viva Deck
+            Hostalix Java 21 Core Architecture &amp; Academic Viva Deck
           </h2>
           <p className="text-xs text-slate-300 mt-1 max-w-2xl">
             Complete, runnable reference implementation of the five core functional blocks, relational entities, Bean Validation, transactional services, and automated test suite.

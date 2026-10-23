@@ -5,6 +5,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Navbar } from './components/Navbar';
+import { LoginPage } from './components/LoginPage';
 import { DashboardOverview } from './components/DashboardOverview';
 import { PatientManager } from './components/PatientManager';
 import { AppointmentManager } from './components/AppointmentManager';
@@ -12,6 +13,7 @@ import { DoctorDepartmentManager } from './components/DoctorDepartmentManager';
 import { BillingManager } from './components/BillingManager';
 import { ReportsAnalytics } from './components/ReportsAnalytics';
 import { JavaLabConsole } from './components/JavaLabConsole';
+import { MiniAIChatbot } from './components/MiniAIChatbot';
 import {
   Patient,
   Doctor,
@@ -35,11 +37,14 @@ import {
   getStoredInvoices,
   saveStoredInvoices,
   getStoredAuditLogs,
-  addAuditLog,
-  resetAllDemoData
+  addAuditLog
 } from './utils/hmsStorage';
 
 export default function App() {
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
+    return localStorage.getItem('hostalix_authenticated') === 'true';
+  });
+
   const [activeTab, setActiveTab] = useState<string>('dashboard');
   const [allUsers, setAllUsers] = useState<User[]>(getStoredUsers());
   const [currentUser, setCurrentUser] = useState<User>(getActiveUser());
@@ -54,7 +59,36 @@ export default function App() {
   const [selectedPatientId, setSelectedPatientId] = useState<number | null>(null);
   const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
 
-  // Sync state on reset or switch
+  const handleLogin = (user: User) => {
+    setCurrentUser(user);
+    persistActiveUser(user);
+    setIsAuthenticated(true);
+    localStorage.setItem('hostalix_authenticated', 'true');
+
+    addAuditLog(
+      user,
+      'USER_LOGIN',
+      'SecurityContext',
+      user.username,
+      `User ${user.fullName} (${user.role}) authenticated successfully.`
+    );
+    setAuditLogs(getStoredAuditLogs());
+  };
+
+  const handleSignOut = () => {
+    if (currentUser) {
+      addAuditLog(
+        currentUser,
+        'USER_LOGOUT',
+        'SecurityContext',
+        currentUser.username,
+        `User ${currentUser.fullName} logged out.`
+      );
+    }
+    setIsAuthenticated(false);
+    localStorage.removeItem('hostalix_authenticated');
+  };
+
   const handleSwitchUser = (user: User) => {
     setCurrentUser(user);
     persistActiveUser(user);
@@ -65,18 +99,6 @@ export default function App() {
       user.username,
       `Switched authenticated principal to ${user.fullName} (${user.role})`
     );
-    setAuditLogs(getStoredAuditLogs());
-  };
-
-  const handleResetData = () => {
-    resetAllDemoData();
-    setAllUsers(getStoredUsers());
-    setCurrentUser(getActiveUser());
-    setDepartments(getStoredDepartments());
-    setDoctors(getStoredDoctors());
-    setPatients(getStoredPatients());
-    setAppointments(getStoredAppointments());
-    setInvoices(getStoredInvoices());
     setAuditLogs(getStoredAuditLogs());
   };
 
@@ -170,13 +192,20 @@ export default function App() {
     setAuditLogs(getStoredAuditLogs());
   };
 
-  const handleProcessPayment = (invoiceId: number, method: any, txnRef: string, notes: string) => {
+  const handleProcessPayment = (
+    invoiceId: number,
+    method: any,
+    txnRef: string,
+    notes: string,
+    currency: 'USD' | 'CNY' = 'USD'
+  ) => {
     const updated = invoices.map((inv) => {
       if (inv.id === invoiceId) {
         return {
           ...inv,
           status: 'PAID' as const,
           paymentMethod: method,
+          paymentCurrency: currency,
           transactionReference: txnRef,
           receiptNotes: notes,
           paidAt: new Date().toISOString(),
@@ -190,12 +219,13 @@ export default function App() {
 
     const settled = invoices.find((i) => i.id === invoiceId);
     if (settled) {
+      const yuanTotal = (settled.totalAmount * 7.25).toFixed(2);
       addAuditLog(
         currentUser,
         'PROCESS_PAYMENT',
         'Invoice',
         settled.invoiceNumber,
-        `Cleared payment of $${settled.totalAmount.toFixed(2)} via ${method} (Ref: ${txnRef})`
+        `Cleared payment of $${settled.totalAmount.toFixed(2)} (¥${yuanTotal}) in ${currency === 'CNY' ? 'Yuan (¥ CNY)' : 'Dollar ($ USD)'} via ${method} (Ref: ${txnRef})`
       );
       setAuditLogs(getStoredAuditLogs());
     }
@@ -204,11 +234,14 @@ export default function App() {
   const handleGenerateInvoiceFromAppointment = (appt: Appointment) => {
     const doc = doctors.find((d) => d.id === appt.doctorId);
     const consultFee = doc ? doc.consultationFee : 150;
+    const docDisplayName = doc
+      ? `Dr. ${doc.firstName} ${doc.lastName}${doc.chineseName ? ` · ${doc.chineseName}` : ''}`
+      : 'Specialist';
 
     const items: InvoiceItem[] = [
       {
         id: 'it-' + Date.now().toString(36) + '-1',
-        description: `Consultation Fee (Dr. ${doc ? doc.lastName : 'Specialist'})`,
+        description: `Consultation Fee (${docDisplayName})`,
         itemType: 'CONSULTATION',
         unitPrice: consultFee,
         quantity: 1,
@@ -268,6 +301,11 @@ export default function App() {
     setActiveTab('billing');
   };
 
+  // If not authenticated, render Login Page
+  if (!isAuthenticated) {
+    return <LoginPage allUsers={allUsers} onLoginSuccess={handleLogin} />;
+  }
+
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col font-sans">
       {/* Top Navigation */}
@@ -277,7 +315,7 @@ export default function App() {
         currentUser={currentUser}
         allUsers={allUsers}
         onSwitchUser={handleSwitchUser}
-        onResetData={handleResetData}
+        onSignOut={handleSignOut}
       />
 
       {/* Main Content Area */}
@@ -364,18 +402,27 @@ export default function App() {
         {activeTab === 'java-core' && <JavaLabConsole />}
       </main>
 
+      {/* Mini AI Chatbot Widget */}
+      <MiniAIChatbot
+        patients={patients}
+        doctors={doctors}
+        departments={departments}
+        appointments={appointments}
+        invoices={invoices}
+      />
+
       {/* Footer */}
       <footer className="border-t border-slate-200 bg-white py-4 mt-auto">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between text-xs text-slate-500 gap-2">
           <div className="flex items-center space-x-2">
-            <span className="font-semibold text-slate-800">ClinicalCore HMS</span>
-            <span>· Enterprise Academic Architecture</span>
-            <span className="px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 font-mono text-[10px] font-bold">
-              JUnit 100% Pass
+            <span className="font-bold text-slate-800">Hostalix</span>
+            <span>· Hospital Management System</span>
+            <span className="px-1.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 font-mono text-[10px] font-bold">
+              System Online
             </span>
           </div>
           <div>
-            Java 21 · Spring Boot 3.3.4 · Spring Security 6 · Spring Data JPA · MySQL 8.0 · Thymeleaf
+            Java 21 · Spring Boot 3.3.4 · Spring Security 6 · Spring Data JPA · MySQL 8.0 · AI Assistant Active
           </div>
         </div>
       </footer>

@@ -79,7 +79,17 @@ export const getStoredDoctors = (): Doctor[] => {
     return INITIAL_DOCTORS;
   }
   try {
-    return JSON.parse(data);
+    const parsed: Doctor[] = JSON.parse(data);
+    const enriched = parsed.map((d) => {
+      if (!d.chineseName) {
+        const init = INITIAL_DOCTORS.find((idoc) => idoc.id === d.id);
+        if (init && init.chineseName) {
+          return { ...d, chineseName: init.chineseName };
+        }
+      }
+      return d;
+    });
+    return enriched;
   } catch {
     return INITIAL_DOCTORS;
   }

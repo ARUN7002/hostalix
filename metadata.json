@@ -1,6 +1,6 @@
 {
-  "name": "ClinicalCore HMS",
-  "description": "Enterprise Hospital Management System with RBAC, Patient Registration, Doctor Scheduling, Billing, and complete Java 21 Spring Boot architecture.",
+  "name": "Hostalix - Modern Hospital Management System",
+  "description": "Hostalix Hospital Management System: Streamlined clinical operations, patient EMR, doctor scheduling, and financial clearing.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

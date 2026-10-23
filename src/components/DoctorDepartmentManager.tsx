@@ -12,6 +12,7 @@ import {
   X
 } from 'lucide-react';
 import { Department, Doctor, Appointment, User } from '../types/hms';
+import { toYuan, formatDualCurrency, formatDoctorName } from '../utils/currency';
 
 interface DoctorDepartmentManagerProps {
   departments: Department[];
@@ -34,10 +35,11 @@ export const DoctorDepartmentManager: React.FC<DoctorDepartmentManagerProps> = (
   const [isAddDoctorOpen, setIsAddDoctorOpen] = useState(false);
   const [isAddDeptOpen, setIsAddDeptOpen] = useState(false);
 
-  // New Doctor Form State
+  // New Doctor Form State with English & Chinese Doctor Names and Dual Currency
   const [newDocData, setNewDocData] = useState({
     firstName: '',
     lastName: '',
+    chineseName: '',
     email: '',
     phone: '+1-555-0199',
     departmentId: departments[0]?.id || 1,
@@ -69,6 +71,7 @@ export const DoctorDepartmentManager: React.FC<DoctorDepartmentManagerProps> = (
       employeeCode: `DOC-${(doctors.length + 101).toString()}`,
       firstName: newDocData.firstName.trim(),
       lastName: newDocData.lastName.trim(),
+      chineseName: newDocData.chineseName.trim() || undefined,
       email: newDocData.email.trim() || `${newDocData.firstName.toLowerCase()}@hospital-central.org`,
       phoneNumber: newDocData.phone.trim(),
       departmentId: Number(newDocData.departmentId),
@@ -114,7 +117,7 @@ export const DoctorDepartmentManager: React.FC<DoctorDepartmentManagerProps> = (
             <span>Clinical Departments &amp; Medical Staff Directory</span>
           </h2>
           <p className="text-xs text-slate-500 mt-0.5">
-            Relational structure of clinical wards, inpatient bed allocations, and physician duty scheduling.
+            Bi-lingual medical staff directory with consultation fees in Dollar ($) and Yuan (¥).
           </p>
         </div>
 
@@ -159,7 +162,6 @@ export const DoctorDepartmentManager: React.FC<DoctorDepartmentManagerProps> = (
 
         {departments.map((dept) => {
           const isSelected = selectedDeptId === dept.id;
-          const deptDocs = doctors.filter((d) => d.departmentId === dept.id);
           const percent = Math.round((dept.occupiedBeds / dept.totalBeds) * 100);
 
           return (
@@ -199,7 +201,7 @@ export const DoctorDepartmentManager: React.FC<DoctorDepartmentManagerProps> = (
             Attending Physicians ({filteredDoctors.length})
           </h3>
           <span className="text-xs text-slate-500 font-mono">
-            Consultation fee tariff configured
+            Dual Tariff: Dollar ($ USD) &amp; Yuan (¥ CNY)
           </span>
         </div>
 
@@ -226,17 +228,25 @@ export const DoctorDepartmentManager: React.FC<DoctorDepartmentManagerProps> = (
                           {dept?.code}
                         </span>
                       </div>
-                      <h4 className="text-base font-bold text-slate-900 mt-1">
-                        Dr. {doc.firstName} {doc.lastName}
+                      <h4 className="text-base font-bold text-slate-900 mt-1 flex items-center gap-1.5 flex-wrap">
+                        <span>Dr. {doc.firstName} {doc.lastName}</span>
+                        {doc.chineseName && (
+                          <span className="text-xs font-semibold px-2 py-0.5 rounded-md bg-amber-50 text-amber-800 border border-amber-200">
+                            {doc.chineseName}
+                          </span>
+                        )}
                       </h4>
                       <p className="text-xs font-semibold text-teal-800">{doc.specialization}</p>
                     </div>
 
                     <div className="text-right">
-                      <span className="text-sm font-bold text-slate-900 font-mono">
-                        ${doc.consultationFee}
-                      </span>
-                      <p className="text-[10px] text-slate-400">per consult</p>
+                      <div className="text-sm font-bold text-slate-900 font-mono">
+                        ${doc.consultationFee.toFixed(2)}
+                      </div>
+                      <div className="text-xs font-bold text-teal-700 font-mono">
+                        ¥{toYuan(doc.consultationFee).toFixed(2)}
+                      </div>
+                      <p className="text-[9px] text-slate-400 uppercase font-semibold mt-0.5">Dual Tariff</p>
                     </div>
                   </div>
 
@@ -313,6 +323,19 @@ export const DoctorDepartmentManager: React.FC<DoctorDepartmentManagerProps> = (
                 </div>
               </div>
 
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">
+                  Chinese Doctor Name (e.g. 马丁内斯医生, 陈医生)
+                </label>
+                <input
+                  type="text"
+                  value={newDocData.chineseName}
+                  onChange={(e) => setNewDocData({ ...newDocData, chineseName: e.target.value })}
+                  className="w-full px-3 py-1.5 border border-slate-300 rounded-lg text-slate-800"
+                  placeholder="e.g. 陈伟医生"
+                />
+              </div>
+
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block font-semibold text-slate-700 mb-1">Department *</label>
@@ -330,7 +353,7 @@ export const DoctorDepartmentManager: React.FC<DoctorDepartmentManagerProps> = (
                 </div>
 
                 <div>
-                  <label className="block font-semibold text-slate-700 mb-1">Consultation Fee ($) *</label>
+                  <label className="block font-semibold text-slate-700 mb-1">Consultation Fee ($ USD) *</label>
                   <input
                     type="number"
                     required
@@ -338,6 +361,9 @@ export const DoctorDepartmentManager: React.FC<DoctorDepartmentManagerProps> = (
                     onChange={(e) => setNewDocData({ ...newDocData, consultationFee: Number(e.target.value) })}
                     className="w-full px-3 py-1.5 border border-slate-300 rounded-lg text-slate-800 font-mono"
                   />
+                  <span className="text-[10px] text-teal-700 font-bold block mt-0.5">
+                    ≈ ¥{toYuan(newDocData.consultationFee || 0).toFixed(2)} CNY (Dual Tariff)
+                  </span>
                 </div>
               </div>
 

@@ -12,7 +12,10 @@ import {
   Receipt,
   X,
   Send,
-  Trash2
+  Trash2,
+  Coins,
+  ArrowRightLeft,
+  Wallet
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import {
@@ -24,6 +27,14 @@ import {
   Appointment,
   User
 } from '../types/hms';
+import {
+  toYuan,
+  toUSD,
+  formatUSD,
+  formatYuan,
+  formatDualCurrency,
+  CURRENCY_CONFIG
+} from '../utils/currency';
 
 interface BillingManagerProps {
   invoices: Invoice[];
@@ -31,7 +42,7 @@ interface BillingManagerProps {
   appointments: Appointment[];
   currentUser: User;
   onAddInvoice: (invoice: Invoice) => void;
-  onProcessPayment: (invoiceId: number, method: any, txnRef: string, notes: string) => void;
+  onProcessPayment: (invoiceId: number, method: any, txnRef: string, notes: string, currency?: 'USD' | 'CNY') => void;
 }
 
 export const BillingManager: React.FC<BillingManagerProps> = ({
@@ -48,8 +59,10 @@ export const BillingManager: React.FC<BillingManagerProps> = ({
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [paymentTargetInvoice, setPaymentTargetInvoice] = useState<Invoice | null>(null);
 
-  // Payment form state
-  const [paymentMethod, setPaymentMethod] = useState<'CASH' | 'CREDIT_CARD' | 'INSURANCE' | 'BANK_TRANSFER'>('CREDIT_CARD');
+  // Two Types of Payment State
+  const [selectedPaymentCurrency, setSelectedPaymentCurrency] = useState<'USD' | 'CNY'>('USD');
+  const [paymentMethodUSD, setPaymentMethodUSD] = useState<'CREDIT_CARD' | 'CASH' | 'INSURANCE' | 'BANK_TRANSFER'>('CREDIT_CARD');
+  const [paymentMethodCNY, setPaymentMethodCNY] = useState<'UNIONPAY' | 'CASH' | 'DIGITAL_PAY' | 'MED_INSURANCE'>('UNIONPAY');
   const [txnRef, setTxnRef] = useState('TXN-POS-' + Math.floor(100000 + Math.random() * 900000));
   const [receiptNotes, setReceiptNotes] = useState('Front desk cashier terminal settlement.');
 
@@ -135,7 +148,8 @@ export const BillingManager: React.FC<BillingManagerProps> = ({
 
   const handleConfirmPayment = () => {
     if (!paymentTargetInvoice) return;
-    onProcessPayment(paymentTargetInvoice.id, paymentMethod, txnRef, receiptNotes);
+    const finalMethod = selectedPaymentCurrency === 'USD' ? paymentMethodUSD : paymentMethodCNY;
+    onProcessPayment(paymentTargetInvoice.id, finalMethod, txnRef, receiptNotes, selectedPaymentCurrency);
 
     // Trigger celebration confetti
     try {
@@ -152,7 +166,8 @@ export const BillingManager: React.FC<BillingManagerProps> = ({
     setActiveReceiptInvoice({
       ...paymentTargetInvoice,
       status: 'PAID',
-      paymentMethod,
+      paymentMethod: finalMethod,
+      paymentCurrency: selectedPaymentCurrency,
       transactionReference: txnRef,
       receiptNotes,
       paidAt: new Date().toISOString(),
@@ -169,7 +184,7 @@ export const BillingManager: React.FC<BillingManagerProps> = ({
             <span>Clinical Billing &amp; Cashier Financial Ledger</span>
           </h2>
           <p className="text-xs text-slate-500 mt-0.5">
-            Itemized invoices, automatic 5% healthcare levy computation, discount bounds, and transaction reconciliation.
+            Itemized invoices, dual currency tariffs ($ USD / ¥ CNY), two payment types, 5% healthcare levy, and cashier audit trail.
           </p>
         </div>
 
@@ -182,48 +197,65 @@ export const BillingManager: React.FC<BillingManagerProps> = ({
         </button>
       </div>
 
-      {/* Financial KPI Cards */}
+      {/* Financial KPI Cards with Dual Currency */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs flex items-center justify-between">
+        <div className="bg-white p-4.5 rounded-xl border border-slate-200 shadow-xs flex items-center justify-between">
           <div>
             <p className="text-xs font-medium text-slate-500">Gross Settled Revenue</p>
-            <h3 className="text-2xl font-bold text-emerald-700 mt-1">
-              ${totalPaid.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-            </h3>
-            <p className="text-[11px] text-emerald-600 font-medium mt-0.5">
+            <div className="mt-1">
+              <h3 className="text-2xl font-extrabold text-emerald-700 font-mono">
+                {formatUSD(totalPaid)}
+              </h3>
+              <p className="text-sm font-bold text-emerald-600 font-mono">
+                {formatYuan(toYuan(totalPaid))}
+              </p>
+            </div>
+            <p className="text-[11px] text-slate-500 font-medium mt-1">
               {invoices.filter((i) => i.status === 'PAID').length} invoices cleared
             </p>
           </div>
-          <div className="h-12 w-12 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center">
+          <div className="h-12 w-12 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
             <CheckCircle2 className="h-6 w-6" />
           </div>
         </div>
 
-        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs flex items-center justify-between">
+        <div className="bg-white p-4.5 rounded-xl border border-slate-200 shadow-xs flex items-center justify-between">
           <div>
             <p className="text-xs font-medium text-slate-500">Outstanding Receivables</p>
-            <h3 className="text-2xl font-bold text-amber-600 mt-1">
-              ${totalPending.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-            </h3>
-            <p className="text-[11px] text-amber-600 font-medium mt-0.5">
-              {invoices.filter((i) => i.status === 'PENDING').length} invoices awaiting payment
+            <div className="mt-1">
+              <h3 className="text-2xl font-extrabold text-amber-600 font-mono">
+                {formatUSD(totalPending)}
+              </h3>
+              <p className="text-sm font-bold text-amber-500 font-mono">
+                {formatYuan(toYuan(totalPending))}
+              </p>
+            </div>
+            <p className="text-[11px] text-slate-500 font-medium mt-1">
+              {invoices.filter((i) => i.status === 'PENDING').length} invoices awaiting clearance
             </p>
           </div>
-          <div className="h-12 w-12 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center">
+          <div className="h-12 w-12 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
             <Clock className="h-6 w-6" />
           </div>
         </div>
 
-        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs flex items-center justify-between">
+        <div className="bg-white p-4.5 rounded-xl border border-slate-200 shadow-xs flex items-center justify-between">
           <div>
-            <p className="text-xs font-medium text-slate-500">Total Billed Volume</p>
-            <h3 className="text-2xl font-bold text-slate-900 mt-1">{invoices.length}</h3>
-            <p className="text-[11px] text-slate-500 font-medium mt-0.5">
-              Levy rate: 5.0% standard healthcare tax
+            <p className="text-xs font-medium text-slate-500">Two Types of Payment</p>
+            <div className="mt-1.5 flex items-center space-x-2">
+              <span className="px-2 py-0.5 rounded bg-blue-50 text-blue-700 text-xs font-bold border border-blue-200">
+                Type 1: Dollar ($ USD)
+              </span>
+              <span className="px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 text-xs font-bold border border-emerald-200">
+                Type 2: Yuan (¥ CNY)
+              </span>
+            </div>
+            <p className="text-[11px] text-slate-500 font-medium mt-1.5">
+              Fixed Clearing Exchange Rate: <strong className="text-slate-700">1.00 USD = {CURRENCY_CONFIG.usdToCnyRate} CNY</strong>
             </p>
           </div>
-          <div className="h-12 w-12 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center">
-            <Receipt className="h-6 w-6" />
+          <div className="h-12 w-12 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0">
+            <Coins className="h-6 w-6" />
           </div>
         </div>
       </div>
@@ -246,7 +278,7 @@ export const BillingManager: React.FC<BillingManagerProps> = ({
         ))}
       </div>
 
-      {/* Invoices Table */}
+      {/* Invoices Table with Dual Dollar & Yuan Tariffs */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
@@ -255,17 +287,20 @@ export const BillingManager: React.FC<BillingManagerProps> = ({
                 <th className="px-4 py-3">Invoice #</th>
                 <th className="px-4 py-3">Patient</th>
                 <th className="px-4 py-3">Issue / Due Date</th>
-                <th className="px-4 py-3">Items Count</th>
-                <th className="px-4 py-3">Subtotal</th>
-                <th className="px-4 py-3">Tax (5%)</th>
-                <th className="px-4 py-3">Net Total</th>
-                <th className="px-4 py-3">Status</th>
+                <th className="px-4 py-3">Items</th>
+                <th className="px-4 py-3">Subtotal ($ / ¥)</th>
+                <th className="px-4 py-3">Tax 5% ($ / ¥)</th>
+                <th className="px-4 py-3">Net Total ($ / ¥)</th>
+                <th className="px-4 py-3">Payment Status</th>
                 <th className="px-4 py-3 text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 text-slate-700">
               {filteredInvoices.map((inv) => {
                 const patient = patients.find((p) => p.id === inv.patientId);
+                const subYuan = toYuan(inv.subtotal);
+                const taxYuan = toYuan(inv.taxAmount);
+                const totalYuan = toYuan(inv.totalAmount);
 
                 return (
                   <tr key={inv.id} className="hover:bg-slate-50/80 transition-colors">
@@ -274,7 +309,7 @@ export const BillingManager: React.FC<BillingManagerProps> = ({
                     </td>
                     <td className="px-4 py-3">
                       <div className="font-bold text-slate-900">
-                        {patient ? `${patient.firstName} ${patient.lastName}` : 'Unknown Patient'}
+                        {patient ? `${patient.firstName} ${patient.lastName}` : 'Walk-in Patient'}
                       </div>
                       <div className="text-[11px] font-mono text-slate-400">{patient?.mrn}</div>
                     </td>
@@ -285,27 +320,37 @@ export const BillingManager: React.FC<BillingManagerProps> = ({
                     <td className="px-4 py-3 text-slate-600">
                       <span className="font-semibold">{inv.items.length} items</span>
                     </td>
-                    <td className="px-4 py-3 font-mono text-slate-700">
-                      ${inv.subtotal.toFixed(2)}
-                    </td>
-                    <td className="px-4 py-3 font-mono text-slate-500">
-                      ${inv.taxAmount.toFixed(2)}
-                    </td>
-                    <td className="px-4 py-3 font-mono font-bold text-slate-900 text-sm">
-                      ${inv.totalAmount.toFixed(2)}
+                    <td className="px-4 py-3">
+                      <div className="font-mono font-semibold text-slate-800">{formatUSD(inv.subtotal)}</div>
+                      <div className="font-mono text-[11px] text-slate-400">{formatYuan(subYuan)}</div>
                     </td>
                     <td className="px-4 py-3">
-                      <span
-                        className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider border ${
-                          inv.status === 'PAID'
-                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                            : inv.status === 'PENDING'
-                            ? 'bg-amber-50 text-amber-700 border-amber-200'
-                            : 'bg-slate-50 text-slate-700 border-slate-200'
-                        }`}
-                      >
-                        {inv.status}
-                      </span>
+                      <div className="font-mono text-slate-600">{formatUSD(inv.taxAmount)}</div>
+                      <div className="font-mono text-[11px] text-slate-400">{formatYuan(taxYuan)}</div>
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="font-mono font-bold text-slate-900 text-sm">{formatUSD(inv.totalAmount)}</div>
+                      <div className="font-mono text-[11px] font-bold text-teal-700">{formatYuan(totalYuan)}</div>
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="space-y-1">
+                        <span
+                          className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider border ${
+                            inv.status === 'PAID'
+                              ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                              : inv.status === 'PENDING'
+                              ? 'bg-amber-50 text-amber-700 border-amber-200'
+                              : 'bg-slate-50 text-slate-700 border-slate-200'
+                          }`}
+                        >
+                          {inv.status}
+                        </span>
+                        {inv.status === 'PAID' && inv.paymentCurrency && (
+                          <div className="text-[10px] font-mono text-slate-500">
+                            Cleared in {inv.paymentCurrency === 'CNY' ? 'Yuan (¥)' : 'Dollar ($)'}
+                          </div>
+                        )}
+                      </div>
                     </td>
                     <td className="px-4 py-3 text-right space-x-1.5 whitespace-nowrap">
                       {inv.status === 'PENDING' ? (
@@ -335,10 +380,10 @@ export const BillingManager: React.FC<BillingManagerProps> = ({
         </div>
       </div>
 
-      {/* Settle / Process Payment Modal */}
+      {/* Settle / Process Payment Modal with Two Types of Payment */}
       {isPaymentModalOpen && paymentTargetInvoice && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white rounded-2xl max-w-md w-full shadow-2xl border border-slate-200 overflow-hidden my-8">
+          <div className="bg-white rounded-2xl max-w-lg w-full shadow-2xl border border-slate-200 overflow-hidden my-8">
             <div className="bg-teal-700 text-white p-4 flex items-center justify-between">
               <div>
                 <h3 className="text-base font-bold">Process Billing Clearance</h3>
@@ -355,26 +400,106 @@ export const BillingManager: React.FC<BillingManagerProps> = ({
             </div>
 
             <div className="p-5 space-y-4 text-xs">
-              <div className="bg-slate-50 p-3 rounded-lg border border-slate-200 text-center">
-                <span className="text-[11px] font-semibold text-slate-500 uppercase">Amount Due</span>
-                <div className="text-3xl font-extrabold text-slate-900 font-mono mt-0.5">
-                  ${paymentTargetInvoice.totalAmount.toFixed(2)}
+              {/* Payment Type Selector (Two Types of Payment: Dollar vs Yuan) */}
+              <div>
+                <label className="block font-bold text-slate-800 mb-2">
+                  Select Type of Payment (Preferable language: English)
+                </label>
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedPaymentCurrency('USD');
+                      setReceiptNotes('Settled in Dollar ($ USD) via cashier terminal.');
+                    }}
+                    className={`p-3 rounded-xl border-2 text-left transition-all cursor-pointer ${
+                      selectedPaymentCurrency === 'USD'
+                        ? 'border-blue-600 bg-blue-50/70 shadow-xs'
+                        : 'border-slate-200 bg-white hover:bg-slate-50'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="font-bold text-xs text-blue-900">Type 1: Dollar ($ USD)</span>
+                      <DollarSign className="h-4 w-4 text-blue-600" />
+                    </div>
+                    <p className="text-[11px] text-slate-500">Pay in Dollar currency</p>
+                    <div className="mt-2 font-mono font-extrabold text-blue-900 text-lg">
+                      {formatUSD(paymentTargetInvoice.totalAmount)}
+                    </div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedPaymentCurrency('CNY');
+                      setReceiptNotes('Settled in Yuan (¥ CNY) via cashier terminal.');
+                    }}
+                    className={`p-3 rounded-xl border-2 text-left transition-all cursor-pointer ${
+                      selectedPaymentCurrency === 'CNY'
+                        ? 'border-emerald-600 bg-emerald-50/70 shadow-xs'
+                        : 'border-slate-200 bg-white hover:bg-slate-50'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="font-bold text-xs text-emerald-900">Type 2: Yuan (¥ CNY)</span>
+                      <Coins className="h-4 w-4 text-emerald-600" />
+                    </div>
+                    <p className="text-[11px] text-slate-500">Pay in Yuan currency</p>
+                    <div className="mt-2 font-mono font-extrabold text-emerald-800 text-lg">
+                      {formatYuan(toYuan(paymentTargetInvoice.totalAmount))}
+                    </div>
+                  </button>
                 </div>
               </div>
 
-              <div>
-                <label className="block font-semibold text-slate-700 mb-1">Payment Method</label>
-                <select
-                  value={paymentMethod}
-                  onChange={(e) => setPaymentMethod(e.target.value as any)}
-                  className="w-full px-3 py-1.5 border border-slate-300 rounded-lg text-slate-800 font-semibold"
-                >
-                  <option value="CREDIT_CARD">Credit / Debit Card (Chip &amp; PIN)</option>
-                  <option value="CASH">Cash Counter Payment</option>
-                  <option value="INSURANCE">Third-Party Health Insurance Pre-Auth</option>
-                  <option value="BANK_TRANSFER">Electronic Bank Transfer / Wire</option>
-                </select>
+              {/* Conversion Breakdown Banner */}
+              <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 flex items-center justify-between">
+                <div>
+                  <span className="text-[11px] text-slate-500 block">Total Due Amount</span>
+                  <div className="text-base font-bold text-slate-900 font-mono mt-0.5">
+                    {formatUSD(paymentTargetInvoice.totalAmount)} = {formatYuan(toYuan(paymentTargetInvoice.totalAmount))}
+                  </div>
+                </div>
+                <div className="text-right">
+                  <span className="text-[10px] text-slate-400 font-mono block">Exchange Rate</span>
+                  <span className="text-xs font-semibold text-slate-700 font-mono">1.00 USD = {CURRENCY_CONFIG.usdToCnyRate} CNY</span>
+                </div>
               </div>
+
+              {/* Payment Method based on chosen Payment Type */}
+              {selectedPaymentCurrency === 'USD' ? (
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">
+                    Dollar ($ USD) Payment Channel
+                  </label>
+                  <select
+                    value={paymentMethodUSD}
+                    onChange={(e) => setPaymentMethodUSD(e.target.value as any)}
+                    className="w-full px-3 py-1.5 border border-slate-300 rounded-lg text-slate-800 font-semibold"
+                  >
+                    <option value="CREDIT_CARD">Credit / Debit Card (Visa, Mastercard, Chip &amp; PIN)</option>
+                    <option value="CASH">Cash Counter Payment ($ USD)</option>
+                    <option value="INSURANCE">Third-Party Health Insurance Direct Pre-Auth</option>
+                    <option value="BANK_TRANSFER">Electronic Bank Wire Transfer ($ USD)</option>
+                  </select>
+                </div>
+              ) : (
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">
+                    Yuan (¥ CNY) Payment Channel
+                  </label>
+                  <select
+                    value={paymentMethodCNY}
+                    onChange={(e) => setPaymentMethodCNY(e.target.value as any)}
+                    className="w-full px-3 py-1.5 border border-slate-300 rounded-lg text-slate-800 font-semibold"
+                  >
+                    <option value="UNIONPAY">UnionPay / Debit Card (Chip &amp; PIN)</option>
+                    <option value="CASH">Cash Counter Payment (¥ Yuan)</option>
+                    <option value="DIGITAL_PAY">Digital Clearing (Mobile Barcode / QR Pay)</option>
+                    <option value="MED_INSURANCE">Medical Pre-Auth Clearing (¥ Yuan)</option>
+                  </select>
+                </div>
+              )}
 
               <div>
                 <label className="block font-semibold text-slate-700 mb-1">
@@ -411,7 +536,7 @@ export const BillingManager: React.FC<BillingManagerProps> = ({
                   onClick={handleConfirmPayment}
                   className="px-5 py-2 rounded-lg bg-teal-600 hover:bg-teal-700 text-white font-bold cursor-pointer"
                 >
-                  Authorize &amp; Issue Receipt
+                  Authorize Payment ({selectedPaymentCurrency === 'CNY' ? formatYuan(toYuan(paymentTargetInvoice.totalAmount)) : formatUSD(paymentTargetInvoice.totalAmount)})
                 </button>
               </div>
             </div>
@@ -419,7 +544,7 @@ export const BillingManager: React.FC<BillingManagerProps> = ({
         </div>
       )}
 
-      {/* Official Hospital Receipt Modal */}
+      {/* Official Hospital Receipt Modal with Dual Currency Details */}
       {activeReceiptInvoice && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
           <div className="bg-white rounded-2xl max-w-xl w-full shadow-2xl border border-slate-200 overflow-hidden my-8">
@@ -456,6 +581,11 @@ export const BillingManager: React.FC<BillingManagerProps> = ({
                 <div className="text-right text-[11px] text-slate-600">
                   <p>Date: {activeReceiptInvoice.issueDate}</p>
                   <p className="font-bold text-emerald-700">STATUS: {activeReceiptInvoice.status}</p>
+                  {activeReceiptInvoice.paymentCurrency && (
+                    <p className="font-bold text-blue-700">
+                      Payment Type: {activeReceiptInvoice.paymentCurrency === 'CNY' ? 'Type 2: Yuan (¥ CNY)' : 'Type 1: Dollar ($ USD)'}
+                    </p>
+                  )}
                   {activeReceiptInvoice.transactionReference && (
                     <p className="font-mono text-slate-400">{activeReceiptInvoice.transactionReference}</p>
                   )}
@@ -481,46 +611,50 @@ export const BillingManager: React.FC<BillingManagerProps> = ({
                 );
               })()}
 
-              {/* Items Breakdown */}
+              {/* Items Breakdown in both currencies */}
               <div className="space-y-1.5 border-t border-slate-200 pt-3">
                 <div className="flex justify-between font-bold text-slate-600 text-[11px] border-b border-slate-100 pb-1">
                   <span>Clinical Item Description</span>
-                  <span>Total</span>
+                  <span>Amount ($ USD / ¥ CNY)</span>
                 </div>
                 {activeReceiptInvoice.items.map((item, idx) => (
                   <div key={idx} className="flex justify-between text-slate-700 py-0.5">
                     <div>
                       <span className="font-semibold">{item.description}</span>
                       <span className="text-[10px] text-slate-400 ml-1.5 font-mono">
-                        ({item.quantity} × ${item.unitPrice.toFixed(2)})
+                        ({item.quantity} × {formatUSD(item.unitPrice)} / {formatYuan(toYuan(item.unitPrice))})
                       </span>
                     </div>
-                    <span className="font-mono font-semibold">${item.total.toFixed(2)}</span>
+                    <div className="text-right font-mono">
+                      <span className="font-semibold text-slate-900">{formatUSD(item.total)}</span>
+                      <span className="text-[11px] text-slate-500 ml-1.5">({formatYuan(toYuan(item.total))})</span>
+                    </div>
                   </div>
                 ))}
               </div>
 
-              {/* Math Summary */}
+              {/* Math Summary in Dual Currencies */}
               <div className="border-t border-slate-200 pt-2 space-y-1 text-slate-600">
-                <div className="flex justify-between">
-                  <span>Subtotal:</span>
-                  <span className="font-mono">${activeReceiptInvoice.subtotal.toFixed(2)}</span>
+                <div className="flex justify-between font-mono">
+                  <span className="font-sans">Subtotal:</span>
+                  <span>{formatUSD(activeReceiptInvoice.subtotal)} ({formatYuan(toYuan(activeReceiptInvoice.subtotal))})</span>
                 </div>
                 {activeReceiptInvoice.discountAmount > 0 && (
-                  <div className="flex justify-between text-rose-600">
-                    <span>Discount applied:</span>
-                    <span className="font-mono">-${activeReceiptInvoice.discountAmount.toFixed(2)}</span>
+                  <div className="flex justify-between text-rose-600 font-mono">
+                    <span className="font-sans">Discount applied:</span>
+                    <span>-{formatUSD(activeReceiptInvoice.discountAmount)} (-{formatYuan(toYuan(activeReceiptInvoice.discountAmount))})</span>
                   </div>
                 )}
-                <div className="flex justify-between">
-                  <span>Healthcare Levy (5%):</span>
-                  <span className="font-mono">${activeReceiptInvoice.taxAmount.toFixed(2)}</span>
+                <div className="flex justify-between font-mono">
+                  <span className="font-sans">Healthcare Levy (5%):</span>
+                  <span>{formatUSD(activeReceiptInvoice.taxAmount)} ({formatYuan(toYuan(activeReceiptInvoice.taxAmount))})</span>
                 </div>
-                <div className="flex justify-between text-sm font-bold text-slate-900 border-t border-slate-200 pt-1.5">
-                  <span>Final Cleared Total:</span>
-                  <span className="font-mono text-teal-700">
-                    ${activeReceiptInvoice.totalAmount.toFixed(2)}
-                  </span>
+                <div className="flex justify-between text-sm font-bold text-slate-900 border-t border-slate-200 pt-1.5 font-mono">
+                  <span className="font-sans">Final Cleared Total:</span>
+                  <div className="text-right">
+                    <span className="text-teal-800">{formatUSD(activeReceiptInvoice.totalAmount)}</span>
+                    <span className="text-emerald-700 ml-2">/ {formatYuan(toYuan(activeReceiptInvoice.totalAmount))}</span>
+                  </div>
                 </div>
               </div>
             </div>
@@ -545,7 +679,7 @@ export const BillingManager: React.FC<BillingManagerProps> = ({
               <div>
                 <h3 className="text-base font-bold">Generate Medical Invoice</h3>
                 <p className="text-xs text-teal-100">
-                  Spring Data JPA Invoice &amp; InvoiceItem Cascading Persistence
+                  Itemized Tariff Calculation with Dual Dollar ($ USD) &amp; Yuan (¥ CNY) Support
                 </p>
               </div>
               <button
@@ -574,14 +708,23 @@ export const BillingManager: React.FC<BillingManagerProps> = ({
                 </div>
 
                 <div>
-                  <label className="block font-semibold text-slate-700 mb-1">Discount Amount ($)</label>
-                  <input
-                    type="number"
-                    min={0}
-                    value={discountAmount}
-                    onChange={(e) => setDiscountAmount(Number(e.target.value))}
-                    className="w-full px-3 py-1.5 border border-slate-300 rounded-lg font-mono text-slate-800"
-                  />
+                  <label className="block font-semibold text-slate-700 mb-1">
+                    Discount Amount ($ USD)
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="number"
+                      min={0}
+                      value={discountAmount}
+                      onChange={(e) => setDiscountAmount(Number(e.target.value))}
+                      className="w-full px-3 py-1.5 border border-slate-300 rounded-lg font-mono text-slate-800"
+                    />
+                    {discountAmount > 0 && (
+                      <span className="absolute right-3 top-1.5 text-[11px] font-mono text-slate-400">
+                        ≈ {formatYuan(toYuan(discountAmount))}
+                      </span>
+                    )}
+                  </div>
                 </div>
               </div>
 
@@ -597,14 +740,17 @@ export const BillingManager: React.FC<BillingManagerProps> = ({
                       <div>
                         <span className="font-semibold text-slate-900">{item.description}</span>
                         <span className="text-[10px] text-slate-500 ml-2">
-                          ({item.quantity} × ${item.unitPrice.toFixed(2)})
+                          ({item.quantity} × {formatUSD(item.unitPrice)} / {formatYuan(toYuan(item.unitPrice))})
                         </span>
                         <span className="text-[9px] px-1.5 py-0.2 rounded font-bold uppercase ml-2 bg-slate-100 text-slate-600">
                           {item.itemType}
                         </span>
                       </div>
                       <div className="flex items-center space-x-2">
-                        <span className="font-mono font-bold text-slate-900">${item.total.toFixed(2)}</span>
+                        <div className="text-right font-mono">
+                          <span className="font-bold text-slate-900">{formatUSD(item.total)}</span>
+                          <span className="text-[11px] text-slate-500 ml-1.5">({formatYuan(toYuan(item.total))})</span>
+                        </div>
                         <button
                           type="button"
                           onClick={() => handleRemoveLineItem(item.id)}
@@ -630,7 +776,7 @@ export const BillingManager: React.FC<BillingManagerProps> = ({
                     <div>
                       <input
                         type="number"
-                        placeholder="Unit Price"
+                        placeholder="Price in $ USD"
                         value={newItemPrice}
                         onChange={(e) => setNewItemPrice(Number(e.target.value))}
                         className="w-full px-2 py-1 border border-slate-300 rounded text-xs bg-white font-mono"
@@ -647,14 +793,15 @@ export const BillingManager: React.FC<BillingManagerProps> = ({
                 </div>
               </div>
 
-              {/* Calculations summary */}
-              <div className="bg-slate-100 p-3 rounded-lg flex justify-between items-center text-xs">
+              {/* Calculations summary in both currencies */}
+              <div className="bg-slate-100 p-3 rounded-lg flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 text-xs">
                 <div>
-                  <span className="text-slate-500">Subtotal: ${subtotal.toFixed(2)}</span> ·{' '}
-                  <span className="text-slate-500">5% Tax: ${tax.toFixed(2)}</span>
+                  <span className="text-slate-600 font-medium">Subtotal: {formatUSD(subtotal)} ({formatYuan(toYuan(subtotal))})</span> ·{' '}
+                  <span className="text-slate-600 font-medium">5% Tax: {formatUSD(tax)} ({formatYuan(toYuan(tax))})</span>
                 </div>
-                <div className="text-sm font-bold text-slate-900">
-                  Total Due: <span className="font-mono text-teal-800">${finalTotal.toFixed(2)}</span>
+                <div className="text-sm font-bold text-slate-900 font-mono">
+                  Total: <span className="text-teal-800">{formatUSD(finalTotal)}</span>{' '}
+                  <span className="text-emerald-700">({formatYuan(toYuan(finalTotal))})</span>
                 </div>
               </div>
 

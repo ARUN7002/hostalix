@@ -11,6 +11,7 @@ import {
   UserCheck
 } from 'lucide-react';
 import { Department, Doctor, Patient, Appointment, Invoice, AuditLog } from '../types/hms';
+import { formatDoctorName } from '../utils/currency';
 
 interface ReportsAnalyticsProps {
   departments: Department[];
@@ -127,7 +128,7 @@ export const ReportsAnalytics: React.FC<ReportsAnalyticsProps> = ({
                   className="p-2 rounded-lg bg-slate-50 border border-slate-100 flex items-center justify-between text-xs"
                 >
                   <div>
-                    <strong className="text-slate-900">Dr. {doc.firstName} {doc.lastName}</strong>
+                    <strong className="text-slate-900">{formatDoctorName(doc.firstName, doc.lastName, doc.chineseName)}</strong>
                     <div className="text-[11px] text-slate-500">{doc.specialization}</div>
                   </div>
                   <span className="font-mono font-bold text-teal-800 bg-teal-50 px-2 py-0.5 rounded border border-teal-200">

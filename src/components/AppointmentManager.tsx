@@ -25,6 +25,7 @@ import {
   PrescriptionItem,
   User as AppUser
 } from '../types/hms';
+import { toYuan, formatDoctorName } from '../utils/currency';
 
 interface AppointmentManagerProps {
   appointments: Appointment[];
@@ -218,10 +219,10 @@ export const AppointmentManager: React.FC<AppointmentManagerProps> = ({
               onChange={(e) => setDoctorFilter(e.target.value)}
               className="bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1 text-xs font-semibold text-slate-700"
             >
-              <option value="ALL">All Attending Physicians</option>
+              <option value="ALL">All Attending Physicians (English / Chinese)</option>
               {doctors.map((d) => (
                 <option key={d.id} value={d.id}>
-                  Dr. {d.firstName} {d.lastName} ({d.specialization})
+                  {formatDoctorName(d)} ({d.specialization})
                 </option>
               ))}
             </select>
@@ -294,9 +295,15 @@ export const AppointmentManager: React.FC<AppointmentManagerProps> = ({
                   </p>
 
                   <div className="pt-2 text-xs text-slate-500 space-y-0.5">
-                    <p className="flex items-center">
-                      <Stethoscope className="h-3 w-3 mr-1.5 text-slate-400" />
-                      Dr. {doctor?.firstName} {doctor?.lastName} ({doctor?.specialization})
+                    <p className="flex items-center flex-wrap gap-1">
+                      <Stethoscope className="h-3 w-3 mr-1 text-slate-400 shrink-0" />
+                      <span className="font-semibold text-slate-800">Dr. {doctor?.firstName} {doctor?.lastName}</span>
+                      {doctor?.chineseName && (
+                        <span className="text-[10px] font-semibold px-1.5 py-0.2 rounded bg-amber-50 text-amber-800 border border-amber-200">
+                          {doctor.chineseName}
+                        </span>
+                      )}
+                      <span>({doctor?.specialization})</span>
                     </p>
                     <p className="text-[11px] text-slate-400 pl-4.5">{doctor?.roomNumber}</p>
                   </div>
@@ -359,13 +366,24 @@ export const AppointmentManager: React.FC<AppointmentManagerProps> = ({
                 </div>
                 <div>
                   <span className="text-[11px] font-bold text-slate-400 uppercase">Physician</span>
-                  <p className="font-bold text-slate-900 text-sm">
-                    Dr. {doctors.find((d) => d.id === activeConsultationAppt.doctorId)?.firstName}{' '}
-                    {doctors.find((d) => d.id === activeConsultationAppt.doctorId)?.lastName}
-                  </p>
-                  <p className="text-slate-500 text-[11px]">
-                    {doctors.find((d) => d.id === activeConsultationAppt.doctorId)?.specialization}
-                  </p>
+                  {(() => {
+                    const doc = doctors.find((d) => d.id === activeConsultationAppt.doctorId);
+                    return (
+                      <div>
+                        <p className="font-bold text-slate-900 text-sm flex items-center space-x-1.5">
+                          <span>Dr. {doc?.firstName} {doc?.lastName}</span>
+                          {doc?.chineseName && (
+                            <span className="text-xs font-semibold px-1.5 py-0.2 rounded bg-amber-50 text-amber-800 border border-amber-200">
+                              {doc.chineseName}
+                            </span>
+                          )}
+                        </p>
+                        <p className="text-slate-500 text-[11px] mt-0.5">
+                          {doc?.specialization} · Fee: ${doc?.consultationFee} (¥{toYuan(doc?.consultationFee || 0)})
+                        </p>
+                      </div>
+                    );
+                  })()}
                 </div>
               </div>
 
@@ -631,7 +649,7 @@ export const AppointmentManager: React.FC<AppointmentManagerProps> = ({
                 >
                   {doctors.map((d) => (
                     <option key={d.id} value={d.id}>
-                      Dr. {d.firstName} {d.lastName} - {d.specialization} (${d.consultationFee})
+                      {formatDoctorName(d)} - {d.specialization} (${d.consultationFee} / ¥{toYuan(d.consultationFee)})
                     </option>
                   ))}
                 </select>
